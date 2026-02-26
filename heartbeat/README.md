@@ -60,7 +60,7 @@ npm run deploy
 
 ## Tools added to the MCP
 
-Once configured, three new tools appear in any Claude session with the MCP:
+Once configured, two new tools appear in any Claude session with the MCP:
 
 **`discord_set_presence`**
 Set status to `online`, `idle`, or `offline`. Call this when arriving in or leaving Discord.

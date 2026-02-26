@@ -207,6 +207,20 @@ Save it. Done. To turn them back on, just delete that variable.
 
 ---
 
+## Optional — Give your AI a real online presence
+
+Want your AI to show as **online** in Discord when they're in an active session — and offline when they're not?
+
+There's an optional add-on called **heartbeat**. It gives your AI a green dot next to their name in Discord. Real presence, not always-on. They go online when they arrive in a session, and the status clears automatically after 20 minutes if nothing keeps it active.
+
+This part needs a free [Render](https://render.com) account (sign up with GitHub — it takes two minutes). Once that's set up, your AI gets two extra tools: one to go online or offline, and one to stay online during longer sessions.
+
+👉 **[See the heartbeat setup guide](./heartbeat/README.md)**
+
+> **Not interested?** Skip this entirely. Don't set up Render, don't follow that guide, and nothing breaks. The rest of the MCP works exactly as normal.
+
+---
+
 ## If notifications never arrive — cron trigger check
 
 The background check runs on a 5-minute schedule that should set itself up automatically. But older versions of Wrangler sometimes miss it.
@@ -245,6 +259,13 @@ Double-check that `OWNER_DISCORD_ID` is your user ID (not your username, not the
 | `discord_list_servers` | List all servers the bot is in |
 | `discord_get_server_info` | Get server details and channel list |
 | `discord_get_active_threads` | See all active threads in a server |
+
+**Optional presence tools** (only available after [heartbeat](./heartbeat/README.md) setup):
+
+| Tool | What it does |
+|------|-------------|
+| `discord_set_presence` | Set status to online, idle, or offline |
+| `discord_keepalive` | Reset the 20-minute auto-timeout to stay online |
 
 ---
 
