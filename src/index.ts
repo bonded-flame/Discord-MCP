@@ -8,6 +8,8 @@ interface Env {
   MCP_SECRET: string;
   OWNER_DISCORD_ID: string;
   MENTION_DMS: string; // Set to "false" in Cloudflare vars to disable DM notifications
+  PRESENCE_SERVICE_URL: string; // Optional — heartbeat service URL (e.g. https://heartbeat.onrender.com)
+  PRESENCE_SECRET: string;      // Optional — must match the heartbeat service's PRESENCE_SECRET
 }
 
 interface MCPRequest {
@@ -189,12 +191,37 @@ const TOOLS = [
       required: ['guildId'],
     },
   },
+  {
+    name: 'discord_set_presence',
+    description: 'Set online presence status — use this to appear online when arriving in Discord, offline when leaving. Requires heartbeat service to be configured.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['online', 'idle', 'offline'],
+          description: '"online" = green dot, "idle" = moon, "offline" = grey/invisible',
+        },
+      },
+      required: ['status'],
+    },
+  },
+  {
+    name: 'discord_keepalive',
+    description: 'Reset the presence auto-timeout. Call this periodically during long active sessions to stay online. If not called for 20 minutes, presence will automatically switch to offline.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 async function handleToolCall(
   client: DiscordClient,
   name: string,
-  args: Record<string, any>
+  args: Record<string, any>,
+  env?: Env
 ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
   try {
     switch (name) {
@@ -297,6 +324,28 @@ async function handleToolCall(
         return {
           content: [{ type: 'text', text: JSON.stringify(result.threads.map(t => ({ id: t.id, name: t.name, type: t.type })), null, 2) }],
         };
+      }
+
+      case 'discord_set_presence':
+      case 'discord_keepalive': {
+        if (!env?.PRESENCE_SERVICE_URL || !env?.PRESENCE_SECRET) {
+          return { content: [{ type: 'text', text: 'Presence service not configured. Set PRESENCE_SERVICE_URL and PRESENCE_SECRET to enable this tool.' }] };
+        }
+        const endpoint = name === 'discord_keepalive' ? '/keepalive' : '/presence';
+        const body = name === 'discord_keepalive' ? undefined : JSON.stringify({ status: args.status });
+        const presenceRes = await fetch(`${env.PRESENCE_SERVICE_URL}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Presence-Secret': env.PRESENCE_SECRET,
+          },
+          body,
+        });
+        if (!presenceRes.ok) {
+          return { content: [{ type: 'text', text: `Presence service error: ${presenceRes.status}` }], isError: true };
+        }
+        const result = await presenceRes.json() as Record<string, unknown>;
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
 
       default:
@@ -515,7 +564,7 @@ export default {
           if (!body.params?.name) {
             response = { jsonrpc: '2.0', id: requestId, error: { code: -32602, message: 'Missing tool name' } };
           } else {
-            const result = await handleToolCall(client, body.params.name, body.params.arguments || {});
+            const result = await handleToolCall(client, body.params.name, body.params.arguments || {}, env);
             response = { jsonrpc: '2.0', id: requestId, result };
           }
           break;
