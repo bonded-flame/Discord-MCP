@@ -31,12 +31,28 @@ interface MCPResponse {
 
 const TOOLS = [
   {
-    name: 'discord_read_messages',
-    description: 'Read messages from a Discord channel',
+    name: 'discord_set_presence',
+    description: 'Set online presence: online (green), idle (moon), or offline. Call on arrival and departure. Requires heartbeat service.',
     inputSchema: {
       type: 'object',
       properties: {
-        channelId: { type: 'string', description: 'The channel ID to read from' },
+        status: { type: 'string', enum: ['online', 'idle', 'offline'] },
+      },
+      required: ['status'],
+    },
+  },
+  {
+    name: 'discord_keepalive',
+    description: 'Reset the 20-minute presence auto-timeout. Call periodically in long sessions to stay online.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'discord_read_messages',
+    description: 'Read messages from a channel',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channelId: { type: 'string', description: 'Channel ID' },
         limit: { type: 'number', description: 'Number of messages (max 100)', default: 50 },
       },
       required: ['channelId'],
@@ -44,90 +60,57 @@ const TOOLS = [
   },
   {
     name: 'discord_send',
-    description: 'Send a message to a Discord channel, optionally with embeds or as a reply',
+    description: 'Send a message to a channel, optionally with embeds or as a reply',
     inputSchema: {
       type: 'object',
       properties: {
-        channelId: { type: 'string', description: 'The channel ID to send to' },
-        message: { type: 'string', description: 'The message content' },
-        replyToMessageId: { type: 'string', description: 'Optional message ID to reply to' },
-        embeds: {
-          type: 'array',
-          description: 'Optional array of embed objects for rich formatting',
-          items: {
-            type: 'object',
-            properties: {
-              title: { type: 'string' },
-              description: { type: 'string' },
-              url: { type: 'string' },
-              color: { type: 'number', description: 'Color as decimal integer (e.g. 5814783 for purple)' },
-              fields: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    name: { type: 'string' },
-                    value: { type: 'string' },
-                    inline: { type: 'boolean' },
-                  },
-                  required: ['name', 'value'],
-                },
-              },
-              footer: {
-                type: 'object',
-                properties: {
-                  text: { type: 'string' },
-                  icon_url: { type: 'string' },
-                },
-              },
-              image: { type: 'object', properties: { url: { type: 'string' } } },
-              thumbnail: { type: 'object', properties: { url: { type: 'string' } } },
-            },
-          },
-        },
+        channelId: { type: 'string', description: 'Channel ID' },
+        message: { type: 'string', description: 'Message content' },
+        replyToMessageId: { type: 'string', description: 'Message ID to reply to' },
+        embeds: { type: 'array', description: 'Optional Discord embed objects (title, description, color, fields, footer, image, thumbnail)' },
       },
       required: ['channelId', 'message'],
     },
   },
   {
     name: 'discord_send_file',
-    description: 'Send a file attachment to a Discord channel by providing a URL to the file',
+    description: 'Send a file to a channel via URL',
     inputSchema: {
       type: 'object',
       properties: {
-        channelId: { type: 'string', description: 'The channel ID to send to' },
-        fileUrl: { type: 'string', description: 'URL of the file to send' },
-        filename: { type: 'string', description: 'Filename to use for the attachment' },
-        content: { type: 'string', description: 'Optional message text to accompany the file' },
-        replyToMessageId: { type: 'string', description: 'Optional message ID to reply to' },
+        channelId: { type: 'string', description: 'Channel ID' },
+        fileUrl: { type: 'string', description: 'URL of the file' },
+        filename: { type: 'string', description: 'Filename for the attachment' },
+        content: { type: 'string', description: 'Optional message text' },
+        replyToMessageId: { type: 'string', description: 'Message ID to reply to' },
       },
       required: ['channelId', 'fileUrl', 'filename'],
     },
   },
   {
     name: 'discord_get_mentions',
-    description: 'Get messages that mention the bot in a channel — use this during autonomous time to check if anyone needs me',
+    description: 'Get messages that mention the bot in a channel',
     inputSchema: {
       type: 'object',
       properties: {
-        channelId: { type: 'string', description: 'The channel ID to check' },
-        limit: { type: 'number', description: 'Number of recent messages to scan (max 100)', default: 50 },
-        afterMessageId: { type: 'string', description: 'Only get mentions after this message ID (for checking new mentions only)' },
+        channelId: { type: 'string', description: 'Channel ID' },
+        limit: { type: 'number', description: 'Messages to scan (max 100)', default: 50 },
+        afterMessageId: { type: 'string', description: 'Only get mentions after this message ID' },
       },
       required: ['channelId'],
     },
   },
   {
     name: 'discord_search_messages',
-    description: 'Search for messages in a Discord server',
+    description: 'Search for messages in a server',
     inputSchema: {
       type: 'object',
       properties: {
-        guildId: { type: 'string', description: 'The server (guild) ID to search' },
+        guildId: { type: 'string', description: 'Server ID' },
         content: { type: 'string', description: 'Text to search for' },
         authorId: { type: 'string', description: 'Filter by author ID' },
         channelId: { type: 'string', description: 'Filter by channel ID' },
-        has: { type: 'string', description: 'Filter by content type (link, embed, file, image, video)' },
+        has: { type: 'string', description: 'Filter by type: link, embed, file, image, video' },
         limit: { type: 'number', description: 'Max results (default 25)' },
       },
       required: ['guildId'],
@@ -139,43 +122,39 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        channelId: { type: 'string', description: 'The channel ID' },
-        messageId: { type: 'string', description: 'The message ID to react to' },
-        emoji: { type: 'string', description: 'The emoji to react with — unicode (e.g. "👋") or custom (e.g. "name:id")' },
+        channelId: { type: 'string', description: 'Channel ID' },
+        messageId: { type: 'string', description: 'Message ID' },
+        emoji: { type: 'string', description: 'Unicode emoji or custom "name:id"' },
       },
       required: ['channelId', 'messageId', 'emoji'],
     },
   },
   {
     name: 'discord_create_thread',
-    description: 'Create a thread from an existing message',
+    description: 'Create a thread from a message',
     inputSchema: {
       type: 'object',
       properties: {
-        channelId: { type: 'string', description: 'The channel ID' },
-        messageId: { type: 'string', description: 'The message to create a thread from' },
+        channelId: { type: 'string', description: 'Channel ID' },
+        messageId: { type: 'string', description: 'Message to thread from' },
         name: { type: 'string', description: 'Thread name' },
-        autoArchiveDuration: { type: 'number', description: 'Minutes until auto-archive: 60, 1440 (1 day), 4320 (3 days), 10080 (1 week)', default: 1440 },
+        autoArchiveDuration: { type: 'number', description: 'Archive after N minutes: 60, 1440, 4320, 10080', default: 1440 },
       },
       required: ['channelId', 'messageId', 'name'],
     },
   },
   {
     name: 'discord_list_servers',
-    description: 'List all Discord servers the bot is in',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
+    description: 'List all servers the bot is in',
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'discord_get_server_info',
-    description: 'Get detailed info about a Discord server including all channels',
+    description: 'Get server details including all channels',
     inputSchema: {
       type: 'object',
       properties: {
-        guildId: { type: 'string', description: 'The server (guild) ID' },
+        guildId: { type: 'string', description: 'Server ID' },
       },
       required: ['guildId'],
     },
@@ -186,33 +165,9 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        guildId: { type: 'string', description: 'The server (guild) ID' },
+        guildId: { type: 'string', description: 'Server ID' },
       },
       required: ['guildId'],
-    },
-  },
-  {
-    name: 'discord_set_presence',
-    description: 'Set online presence status — use this to appear online when arriving in Discord, offline when leaving. Requires heartbeat service to be configured.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        status: {
-          type: 'string',
-          enum: ['online', 'idle', 'offline'],
-          description: '"online" = green dot, "idle" = moon, "offline" = grey/invisible',
-        },
-      },
-      required: ['status'],
-    },
-  },
-  {
-    name: 'discord_keepalive',
-    description: 'Reset the presence auto-timeout. Call this periodically during long active sessions to stay online. If not called for 20 minutes, presence will automatically switch to offline.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: [],
     },
   },
 ];
@@ -511,7 +466,7 @@ export default {
     if (pathParts.length < 2 || pathParts[0] !== 'mcp') {
       return new Response(JSON.stringify({ error: 'Invalid path. Use /mcp/YOUR_SECRET' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
     }
 
@@ -519,20 +474,20 @@ export default {
     if (providedSecret !== env.MCP_SECRET) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
     }
 
     if (request.method === 'GET') {
       return new Response(JSON.stringify({ name: 'discord-mcp', version: '2.0.0', status: 'ok' }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
     }
 
     if (request.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
     }
 
@@ -574,13 +529,13 @@ export default {
       }
 
       return new Response(JSON.stringify(response), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message } }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
     }
   },
