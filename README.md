@@ -251,6 +251,8 @@ Double-check that `OWNER_DISCORD_ID` is your user ID (not your username, not the
 |------|-------------|
 | `discord_read_messages` | Read recent messages from a channel |
 | `discord_send` | Send a message, reply, or rich embed |
+| `discord_edit_message` | Edit one of the bot's own messages |
+| `discord_delete_message` | Delete one of the bot's own messages |
 | `discord_send_file` | Send a file attachment via URL |
 | `discord_add_reaction` | React to a message with any emoji |
 | `discord_get_mentions` | Check if anyone mentioned the bot recently |

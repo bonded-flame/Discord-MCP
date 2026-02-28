@@ -73,6 +73,31 @@ const TOOLS = [
     },
   },
   {
+    name: 'discord_edit_message',
+    description: 'Edit one of the bot\'s own messages',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channelId: { type: 'string', description: 'Channel ID' },
+        messageId: { type: 'string', description: 'Message ID to edit' },
+        content: { type: 'string', description: 'New message content' },
+      },
+      required: ['channelId', 'messageId', 'content'],
+    },
+  },
+  {
+    name: 'discord_delete_message',
+    description: 'Delete one of the bot\'s own messages',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channelId: { type: 'string', description: 'Channel ID' },
+        messageId: { type: 'string', description: 'Message ID to delete' },
+      },
+      required: ['channelId', 'messageId'],
+    },
+  },
+  {
     name: 'discord_send_file',
     description: 'Send a file to a channel via URL',
     inputSchema: {
@@ -204,6 +229,16 @@ async function handleToolCall(
           ? `Message sent to ${args.channelId} as reply to ${args.replyToMessageId}`
           : `Message sent to ${args.channelId}`;
         return { content: [{ type: 'text', text: response }] };
+      }
+
+      case 'discord_edit_message': {
+        const edited = await client.editMessage(args.channelId, args.messageId, args.content);
+        return { content: [{ type: 'text', text: `Message ${edited.id} updated.` }] };
+      }
+
+      case 'discord_delete_message': {
+        await client.deleteMessage(args.channelId, args.messageId);
+        return { content: [{ type: 'text', text: `Message ${args.messageId} deleted.` }] };
       }
 
       case 'discord_send_file': {

@@ -164,6 +164,23 @@ export class DiscordClient {
     return response.json();
   }
 
+  async editMessage(channelId: string, messageId: string, content: string): Promise<DiscordMessage> {
+    return this.request<DiscordMessage>(
+      `/channels/${channelId}/messages/${messageId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ content }),
+      }
+    );
+  }
+
+  async deleteMessage(channelId: string, messageId: string): Promise<void> {
+    await this.request<void>(
+      `/channels/${channelId}/messages/${messageId}`,
+      { method: 'DELETE' }
+    );
+  }
+
   async searchMessages(
     guildId: string,
     params: {
