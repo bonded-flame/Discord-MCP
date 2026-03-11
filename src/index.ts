@@ -10,6 +10,7 @@ interface Env {
   MENTION_DMS: string; // Set to "false" in Cloudflare vars to disable DM notifications
   PRESENCE_SERVICE_URL: string; // Optional — heartbeat service URL (e.g. https://heartbeat.onrender.com)
   PRESENCE_SECRET: string;      // Optional — must match the heartbeat service's PRESENCE_SECRET
+  WATCH_CHANNELS: string;       // Optional — comma-separated channel IDs to monitor for mentions. If unset, scans first 8 channels per guild.
 }
 
 interface MCPRequest {
@@ -430,17 +431,19 @@ async function pollMentions(env: Env): Promise<void> {
 
   const foundMentions: string[] = [];
 
+  // If WATCH_CHANNELS is set, only scan those specific channel IDs.
+  // Otherwise fall back to first 8 text channels per guild (free tier subrequest limit).
+  const watchList = env.WATCH_CHANNELS
+    ? env.WATCH_CHANNELS.split(',').map(s => s.trim()).filter(Boolean)
+    : null;
+
   for (const guild of guilds) {
     try {
       const channels = await client.getGuildChannels(guild.id);
 
-      // Text channels (0), news channels (5), threads (10, 11, 12)
-      // Cap at 8 channels per guild — Cloudflare free tier has a 50 subrequest
-      // limit per execution. With multiple guilds + threads + the DM itself,
-      // scanning unlimited channels blows past this and the whole job crashes.
-      const relevantChannels = channels.filter(c =>
-        [0, 5, 10, 11, 12].includes(c.type)
-      ).slice(0, 8);
+      const relevantChannels = watchList
+        ? channels.filter(c => watchList.includes(c.id))
+        : channels.filter(c => [0, 5, 10, 11, 12].includes(c.type)).slice(0, 8);
 
       for (const channel of relevantChannels) {
         try {
