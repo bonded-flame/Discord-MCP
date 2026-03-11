@@ -435,9 +435,12 @@ async function pollMentions(env: Env): Promise<void> {
       const channels = await client.getGuildChannels(guild.id);
 
       // Text channels (0), news channels (5), threads (10, 11, 12)
+      // Cap at 8 channels per guild — Cloudflare free tier has a 50 subrequest
+      // limit per execution. With multiple guilds + threads + the DM itself,
+      // scanning unlimited channels blows past this and the whole job crashes.
       const relevantChannels = channels.filter(c =>
         [0, 5, 10, 11, 12].includes(c.type)
-      );
+      ).slice(0, 8);
 
       for (const channel of relevantChannels) {
         try {
@@ -453,7 +456,7 @@ async function pollMentions(env: Env): Promise<void> {
       // Also check active threads (threads are separate from channels in Discord API)
       try {
         const threadsResult = await client.getActiveThreads(guild.id);
-        for (const thread of threadsResult.threads) {
+        for (const thread of threadsResult.threads.slice(0, 5)) {
           try {
             await checkChannelForActivity(
               client, thread.id, thread.name, guild.name,
