@@ -2,6 +2,8 @@
 // Lightweight REST-based MCP for mobile Claude and browser clients
 
 import { DiscordClient, DiscordEmbed } from './discord';
+import { handleRestRequest } from './rest';
+import { getOpenAPISpec } from './openapi';
 
 interface Env {
   DISCORD_TOKEN: string;
@@ -68,7 +70,7 @@ const TOOLS = [
         channelId: { type: 'string', description: 'Channel ID' },
         message: { type: 'string', description: 'Message content' },
         replyToMessageId: { type: 'string', description: 'Message ID to reply to' },
-        embeds: { type: 'array', description: 'Optional Discord embed objects (title, description, color, fields, footer, image, thumbnail)' },
+        embeds: { type: 'array', items: { type: 'object' }, description: 'Optional Discord embed objects (title, description, color, fields, footer, image, thumbnail)' },
       },
       required: ['channelId', 'message'],
     },
@@ -495,7 +497,7 @@ export default {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
         },
       });
@@ -504,8 +506,8 @@ export default {
     const url = new URL(request.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
 
-    if (pathParts.length < 2 || pathParts[0] !== 'mcp') {
-      return new Response(JSON.stringify({ error: 'Invalid path. Use /mcp/YOUR_SECRET' }), {
+    if (pathParts.length < 2 || (pathParts[0] !== 'mcp' && pathParts[0] !== 'api')) {
+      return new Response(JSON.stringify({ error: 'Invalid path. Use /mcp/YOUR_SECRET or /api/YOUR_SECRET/...' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
@@ -519,6 +521,22 @@ export default {
       });
     }
 
+    // ============ REST API (for ChatGPT Actions / OpenAPI consumers) ============
+    if (pathParts[0] === 'api') {
+      const remainingPath = pathParts.slice(2).join('/');
+
+      // Serve OpenAPI spec
+      if (remainingPath === 'openapi.json' && request.method === 'GET') {
+        const baseUrl = `${url.protocol}//${url.host}/api/${env.MCP_SECRET}`;
+        return new Response(JSON.stringify(getOpenAPISpec(baseUrl), null, 2), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+        });
+      }
+
+      return handleRestRequest(request, env, remainingPath, handleToolCall);
+    }
+
+    // ============ MCP Protocol (for Claude) ============
     if (request.method === 'GET') {
       return new Response(JSON.stringify({ name: 'discord-mcp', version: '2.0.0', status: 'ok' }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },

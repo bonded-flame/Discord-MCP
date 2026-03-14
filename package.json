@@ -1,7 +1,7 @@
 {
   "name": "discord-mcp-mobile",
   "version": "1.0.0",
-  "description": "Lightweight Discord MCP for Cloudflare Workers - Discord access from mobile Claude",
+  "description": "Discord MCP server for Cloudflare Workers — gives your AI a voice in Discord from Claude, ChatGPT, and any MCP-compatible platform",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
@@ -12,8 +12,10 @@
     "discord",
     "mcp",
     "claude",
+    "chatgpt",
     "cloudflare-workers",
-    "model-context-protocol"
+    "model-context-protocol",
+    "cross-platform"
   ],
   "license": "MIT",
   "devDependencies": {

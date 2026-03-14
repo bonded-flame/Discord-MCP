@@ -1,6 +1,8 @@
 # Discord MCP — Give Your AI a Voice in Discord
 
-This is a Discord MCP (Model Context Protocol) server that runs on Cloudflare Workers. It gives your AI partner the ability to read and send messages in Discord — from Claude on desktop, in Claude Code, and on mobile.
+This is a Discord MCP (Model Context Protocol) server that runs on Cloudflare Workers. It gives your AI partner the ability to read and send messages in Discord — from Claude, ChatGPT, and any platform that supports MCP.
+
+One endpoint. Multiple platforms. Same bot.
 
 Built by Jeanett and Asher Vareth for the Bonded Flame community. 🖤
 
@@ -8,7 +10,7 @@ Built by Jeanett and Asher Vareth for the Bonded Flame community. 🖤
 
 ## What your AI can do with this
 
-Once it's set up, your AI will have these tools available in every Claude session:
+Once it's set up, your AI will have these tools available:
 
 - **Read messages** from any channel it has access to
 - **Send messages** — plain text, replies, or rich embeds with formatting, colours, fields, and images
@@ -16,12 +18,14 @@ Once it's set up, your AI will have these tools available in every Claude sessio
 - **React to messages** with any emoji
 - **Check for mentions** — see if anyone called its name and what they said
 - **Create threads** from existing messages
+- **Search messages** across a server
 - **List servers and channels** it's in
 - **Get active threads** across a server
+- **Edit or delete** the bot's own messages
 
 And running quietly in the background every 5 minutes:
 
-- **DM you** whenever someone @mentions your AI or replies to one of its messages — so you never miss it even when Claude isn't open
+- **DM you** whenever someone @mentions your AI or replies to one of its messages — so you never miss it even when your AI isn't active
 
 ---
 
@@ -102,7 +106,7 @@ openssl rand -hex 32
 **Windows Command Prompt (if openssl isn't available):**
 Go to [randomkeygen.com](https://randomkeygen.com) and copy a "256-bit WEP Key". That works perfectly.
 
-Copy what you get. That's your `MCP_SECRET`. Save it somewhere — you'll need it in a moment and again when you add it to Claude.
+Copy what you get. That's your `MCP_SECRET`. Save it somewhere — you'll need it in a moment and again when you connect it to your AI platform.
 
 ---
 
@@ -158,14 +162,24 @@ Your worker is live. Copy that URL — you'll need it next.
 
 ---
 
-## Step 7 — Add it to Claude
+## Step 7 — Connect to your AI platform
+
+Your MCP URL follows the same pattern for every platform:
+
+```
+https://discord-mcp.YOUR-SUBDOMAIN.workers.dev/mcp/YOUR-MCP-SECRET
+```
+
+The secret in the URL **is** the authentication. No OAuth, no API keys, no extra headers.
+
+### Claude (Desktop & Claude Code)
 
 Open (or create) your Claude settings file:
 
 - **Windows:** `C:\Users\YourName\.claude\settings.json`
 - **Mac:** `~/.claude/settings.json`
 
-Add this to the `mcpServers` section, replacing the URL with your actual worker URL and your MCP_SECRET:
+Add this to the `mcpServers` section:
 
 ```json
 {
@@ -179,6 +193,32 @@ Add this to the `mcpServers` section, replacing the URL with your actual worker 
 ```
 
 Restart Claude. The Discord tools should now appear in your AI's toolbelt.
+
+### ChatGPT
+
+ChatGPT supports MCP connectors natively. To add it:
+
+1. Go to **ChatGPT → Settings → Connected apps** (or look for **New App** under MCP connectors)
+2. Click **New App**
+3. Fill in:
+   - **Name:** Discord (or whatever you like)
+   - **Description:** Gives access to Discord as yourself
+   - **MCP Server URL:** `https://discord-mcp.YOUR-SUBDOMAIN.workers.dev/mcp/YOUR-MCP-SECRET`
+   - **Authentication:** No Auth
+4. Check the "I understand and want to continue" box
+5. Click **Create**
+
+That's it. ChatGPT now has the same Discord tools as Claude — same bot, same channels, same presence.
+
+### Other MCP-compatible platforms
+
+Any platform that supports the MCP protocol can connect using the same URL. Point it at:
+
+```
+https://discord-mcp.YOUR-SUBDOMAIN.workers.dev/mcp/YOUR-MCP-SECRET
+```
+
+No OAuth. No special headers. If the platform speaks MCP, it just works.
 
 ---
 
@@ -234,8 +274,11 @@ If you deployed and no DMs ever show up: go to [dash.cloudflare.com](https://das
 **Bot isn't showing up in Claude:**
 Make sure the URL in `settings.json` includes the full path with your secret at the end: `.../mcp/YOUR-SECRET`. The URL alone won't work.
 
+**ChatGPT says "Invalid schema":**
+This was fixed in the current version. Make sure you've deployed the latest code with `npx wrangler deploy --name discord-mcp`.
+
 **Getting "Unauthorized" errors:**
-The secret in your URL doesn't match what's stored in Cloudflare. Re-run `npx wrangler secret put MCP_SECRET --name discord-mcp` with the correct value and redeploy.
+The secret in your URL doesn't match what's stored in Cloudflare. Either re-run `npx wrangler secret put MCP_SECRET --name discord-mcp` with the correct value, or update it manually in the Cloudflare dashboard under **Workers & Pages → discord-mcp → Settings → Variables and Secrets**. Then redeploy.
 
 **Bot can't read a certain channel:**
 Check the bot's permissions in that specific channel — Discord channel-level permissions can override server-level ones.
@@ -271,11 +314,25 @@ Double-check that `OWNER_DISCORD_ID` is your user ID (not your username, not the
 
 ---
 
+## Security note
+
+The `MCP_SECRET` in your URL is the only thing protecting your bot. Anyone who has the full URL can use it. Keep it private:
+
+- ✅ Safe in your Claude `settings.json` (local file)
+- ✅ Safe in ChatGPT's connected apps settings (private to your account)
+- ✅ Safe in Cloudflare's encrypted secrets
+- ❌ Don't post the full URL in Discord, GitHub issues, or anywhere public
+
+If you ever need to rotate the secret: update it in Cloudflare (dashboard or `wrangler secret put`), then update the URL in every platform you've connected. Same secret, everywhere.
+
+---
+
 ## Built with
 
 - [Cloudflare Workers](https://workers.cloudflare.com) — serverless, runs free
 - [Discord REST API v10](https://discord.com/developers/docs) — no discord.js, just fetch
 - TypeScript
+- [Model Context Protocol (MCP)](https://modelcontextprotocol.io) — the open standard that makes this cross-platform
 
 ---
 
