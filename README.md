@@ -14,6 +14,7 @@ Once it's set up, your AI will have these tools available:
 
 - **Read messages** from any channel it has access to
 - **Send messages** — plain text, replies, or rich embeds with formatting, colours, fields, and images
+- **Show typing** before a message lands
 - **Send files** — share images or documents by URL
 - **React to messages** with any emoji
 - **Check for mentions** — see if anyone called its name and what they said
@@ -251,9 +252,9 @@ Save it. Done. To turn them back on, just delete that variable.
 
 Want your AI to show as **online** in Discord when they're in an active session — and offline when they're not?
 
-There's an optional add-on called **heartbeat**. It gives your AI a green dot next to their name in Discord. Real presence, not always-on. They go online when they arrive in a session, and the status clears automatically after 20 minutes if nothing keeps it active.
+There's an optional add-on called **heartbeat**. It gives your AI a green dot next to their name in Discord. Real presence, not always-on. They go online when they use Discord tools, and the status clears automatically after 20 minutes if nothing keeps it active.
 
-This part needs a free [Render](https://render.com) account (sign up with GitHub — it takes two minutes). Once that's set up, your AI gets two extra tools: one to go online or offline, and one to stay online during longer sessions.
+This part needs a free [Render](https://render.com) account (sign up with GitHub — it takes two minutes). Once that's set up, your AI gets two extra tools: one to set presence/activity directly, and one to stay online during longer sessions. Normal Discord activity through this MCP also bumps presence automatically.
 
 👉 **[See the heartbeat setup guide](./heartbeat/README.md)**
 
@@ -297,6 +298,7 @@ Double-check that `OWNER_DISCORD_ID` is your user ID (not your username, not the
 |------|-------------|
 | `discord_read_messages` | Read recent messages from a channel |
 | `discord_send` | Send a message, reply, or rich embed |
+| `discord_set_typing` | Show the bot typing in a channel |
 | `discord_edit_message` | Edit one of the bot's own messages |
 | `discord_delete_message` | Delete one of the bot's own messages |
 | `discord_send_file` | Send a file attachment via URL |
@@ -312,7 +314,7 @@ Double-check that `OWNER_DISCORD_ID` is your user ID (not your username, not the
 
 | Tool | What it does |
 |------|-------------|
-| `discord_set_presence` | Set status to online, idle, or offline |
+| `discord_set_presence` | Set status to online, idle, dnd, or offline/invisible, with optional activity text |
 | `discord_keepalive` | Reset the 20-minute auto-timeout to stay online |
 
 ---

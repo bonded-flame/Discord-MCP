@@ -33,6 +33,7 @@ const routes: Route[] = [
   // Messages
   { method: 'GET',    pattern: /^channels\/([^/]+)\/messages$/, paramNames: ['channelId'], toolName: 'discord_read_messages' },
   { method: 'POST',   pattern: /^channels\/([^/]+)\/messages$/, paramNames: ['channelId'], toolName: 'discord_send', successStatus: 201 },
+  { method: 'POST',   pattern: /^channels\/([^/]+)\/typing$/, paramNames: ['channelId'], toolName: 'discord_set_typing' },
   { method: 'PATCH',  pattern: /^channels\/([^/]+)\/messages\/([^/]+)$/, paramNames: ['channelId', 'messageId'], toolName: 'discord_edit_message' },
   { method: 'DELETE', pattern: /^channels\/([^/]+)\/messages\/([^/]+)$/, paramNames: ['channelId', 'messageId'], toolName: 'discord_delete_message', successStatus: 204 },
   // Files

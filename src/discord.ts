@@ -9,13 +9,18 @@ export interface DiscordMessage {
   author: {
     id: string;
     username: string;
+    global_name?: string | null;
     bot: boolean;
   };
   timestamp: string;
+  edited_timestamp?: string | null;
   attachments: any[];
   embeds: any[];
   mentions: { id: string; username: string }[];
   mention_everyone: boolean;
+  reactions?: { count: number; emoji: { id?: string; name?: string; animated?: boolean } }[];
+  sticker_items?: { id: string; name: string; format_type: number }[];
+  pinned?: boolean;
   message_reference?: {
     message_id: string;
   };
@@ -93,6 +98,13 @@ export class DiscordClient {
       `/channels/${channelId}/messages?limit=${Math.min(limit, 100)}`
     );
     return messages.reverse();
+  }
+
+  async setTyping(channelId: string): Promise<void> {
+    await this.request<void>(
+      `/channels/${channelId}/typing`,
+      { method: 'POST' }
+    );
   }
 
   async sendMessage(

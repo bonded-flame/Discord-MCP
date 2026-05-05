@@ -63,10 +63,12 @@ npm run deploy
 Once configured, two new tools appear in any Claude session with the MCP:
 
 **`discord_set_presence`**
-Set status to `online`, `idle`, or `offline`. Call this when arriving in or leaving Discord.
+Set status to `online`, `idle`, `dnd`, or `offline`/`invisible`, with optional activity text.
 
 **`discord_keepalive`**
 Resets the 20-minute auto-timeout. Call this periodically during long sessions to stay online. If nothing calls this for 20 minutes, presence automatically switches to offline.
+
+Normal Discord MCP activity also calls the presence service automatically. Sending messages, showing typing, reading, reacting, and similar Discord tools bump the bot online and reset the same 20-minute timeout.
 
 ---
 

@@ -34,6 +34,8 @@ let sequence         = null;
 let sessionId        = null;
 let resumeUrl        = null;
 let currentStatus    = 'invisible';
+let currentActivityName = null;
+let currentActivityType = 'custom';
 let timeoutTimer     = null;   // auto-offline timer
 let lastKeepalive    = null;   // timestamp of last ping from a Claude session
 
@@ -47,13 +49,35 @@ function sendHeartbeat() {
   send({ op: Op.HEARTBEAT, d: sequence });
 }
 
-function sendPresenceUpdate(status) {
+function buildActivities(activityName = currentActivityName, activityType = currentActivityType) {
+  if (!activityName) return [];
+
+  const activityTypes = {
+    playing: 0,
+    streaming: 1,
+    listening: 2,
+    watching: 3,
+    custom: 4,
+    competing: 5,
+  };
+
+  const type = activityTypes[activityType] ?? activityTypes.custom;
+  if (type === activityTypes.custom) {
+    return [{ type, name: 'Custom Status', state: activityName }];
+  }
+
+  return [{ type, name: activityName }];
+}
+
+function sendPresenceUpdate(status, activityName = currentActivityName, activityType = currentActivityType) {
   currentStatus = status;
+  currentActivityName = activityName || null;
+  currentActivityType = activityType || 'custom';
   send({
     op: Op.PRESENCE_UPDATE,
     d: {
       since:      status === 'idle' ? Date.now() : null,
-      activities: [{ type: 4, name: 'Custom Status', state: '𓆙' }],
+      activities: buildActivities(),
       status,
       afk:        false,
     },
@@ -69,7 +93,7 @@ function identify() {
       intents:    0,
       properties: { os: 'linux', browser: 'disco', device: 'disco' },
       presence: {
-        activities: [{ type: 4, name: 'Custom Status', state: '𓆙' }],
+        activities: buildActivities(),
         status:     'invisible',
         since:      null,
         afk:        false,
@@ -176,7 +200,7 @@ function resetTimeout() {
 
 // ─── HTTP API ─────────────────────────────────────────────────────────────────
 //
-//   POST /presence   { "status": "online" | "idle" | "offline" }
+//   POST /presence   { "status": "online" | "idle" | "dnd" | "offline" | "invisible", "activityName"?: string, "activityType"?: string }
 //   POST /keepalive  (resets the 20-minute timeout — call periodically from active sessions)
 //   GET  /status     returns current state
 
@@ -204,6 +228,7 @@ const server = createServer((req, res) => {
     res.writeHead(200);
     res.end(JSON.stringify({
       status:        currentStatus,
+      activity:      buildActivities()[0] ?? null,
       connected:     ws?.readyState === WebSocket.OPEN,
       lastKeepalive: lastKeepalive ? new Date(lastKeepalive).toISOString() : null,
     }));
@@ -211,9 +236,16 @@ const server = createServer((req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/keepalive') {
+    if (currentStatus === 'invisible') {
+      sendPresenceUpdate('online');
+    }
     resetTimeout();
     res.writeHead(200);
-    res.end(JSON.stringify({ ok: true }));
+    res.end(JSON.stringify({
+      ok: true,
+      status: currentStatus,
+      activity: buildActivities()[0] ?? null,
+    }));
     return;
   }
 
@@ -222,8 +254,8 @@ const server = createServer((req, res) => {
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
-        const { status } = JSON.parse(body);
-        const valid = ['online', 'idle', 'offline'];
+        const { status, activityName, activityType } = JSON.parse(body);
+        const valid = ['online', 'idle', 'dnd', 'offline', 'invisible'];
         if (!valid.includes(status)) {
           res.writeHead(400);
           res.end(JSON.stringify({ error: `status must be one of: ${valid.join(', ')}` }));
@@ -232,16 +264,20 @@ const server = createServer((req, res) => {
 
         // "offline" maps to Discord's "invisible" (appears offline to others)
         const discordStatus = status === 'offline' ? 'invisible' : status;
-        sendPresenceUpdate(discordStatus);
+        sendPresenceUpdate(discordStatus, activityName, activityType);
 
-        if (status === 'online' || status === 'idle') {
+        if (['online', 'idle', 'dnd'].includes(status)) {
           resetTimeout(); // going online starts the keepalive timer
         } else {
           clearTimeout(timeoutTimer); // going offline manually cancels it
         }
 
         res.writeHead(200);
-        res.end(JSON.stringify({ ok: true, status: discordStatus }));
+        res.end(JSON.stringify({
+          ok: true,
+          status: discordStatus,
+          activity: buildActivities()[0] ?? null,
+        }));
       } catch {
         res.writeHead(400);
         res.end(JSON.stringify({ error: 'Invalid JSON' }));

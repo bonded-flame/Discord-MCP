@@ -78,6 +78,16 @@ export function getOpenAPISpec(baseUrl: string): object {
           responses: { '204': { description: 'Message deleted' } },
         },
       },
+      '/channels/{channelId}/typing': {
+        post: {
+          operationId: 'discord_set_typing',
+          summary: 'Show the bot typing in a channel for a few seconds',
+          parameters: [
+            { name: 'channelId', in: 'path', required: true, schema: { type: 'string' }, description: 'Channel ID' },
+          ],
+          responses: { '200': { description: 'Typing indicator sent', content: { 'application/json': { schema: { type: 'object' } } } } },
+        },
+      },
       '/channels/{channelId}/files': {
         post: {
           operationId: 'discord_send_file',
@@ -212,7 +222,7 @@ export function getOpenAPISpec(baseUrl: string): object {
       '/presence': {
         post: {
           operationId: 'discord_set_presence',
-          summary: 'Set bot online presence: online, idle, or offline. Requires heartbeat service.',
+          summary: 'Set bot online presence and optional activity text. Requires heartbeat service.',
           parameters: [],
           requestBody: {
             required: true,
@@ -221,7 +231,11 @@ export function getOpenAPISpec(baseUrl: string): object {
                 schema: {
                   type: 'object',
                   required: ['status'],
-                  properties: { status: { type: 'string', enum: ['online', 'idle', 'offline'] } },
+                  properties: {
+                    status: { type: 'string', enum: ['online', 'idle', 'dnd', 'offline', 'invisible'] },
+                    activityName: { type: 'string', description: 'Optional activity/custom status text' },
+                    activityType: { type: 'string', enum: ['playing', 'streaming', 'listening', 'watching', 'custom', 'competing'], description: 'Activity style, defaults to custom' },
+                  },
                 },
               },
             },

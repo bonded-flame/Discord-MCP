@@ -35,12 +35,14 @@ interface MCPResponse {
 const TOOLS = [
   {
     name: 'discord_set_presence',
-    description: 'Set online presence: online (green), idle (moon), or offline. Call on arrival and departure. Requires heartbeat service.',
+    description: 'Set online presence and optional activity text. Requires heartbeat service.',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
-        status: { type: 'string', enum: ['online', 'idle', 'offline'] },
+        status: { type: 'string', enum: ['online', 'idle', 'dnd', 'offline', 'invisible'] },
+        activityName: { type: 'string', description: 'Optional activity/custom status text' },
+        activityType: { type: 'string', enum: ['playing', 'streaming', 'listening', 'watching', 'custom', 'competing'], description: 'Activity style, defaults to custom' },
       },
       required: ['status'],
     },
@@ -77,6 +79,18 @@ const TOOLS = [
         embeds: { type: 'array', items: { type: 'object' }, description: 'Optional Discord embed objects (title, description, color, fields, footer, image, thumbnail)' },
       },
       required: ['channelId', 'message'],
+    },
+  },
+  {
+    name: 'discord_set_typing',
+    description: 'Show the bot typing in a channel for a few seconds. Also marks presence online when heartbeat is configured.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channelId: { type: 'string', description: 'Channel ID' },
+      },
+      required: ['channelId'],
     },
   },
   {
@@ -214,6 +228,37 @@ const TOOLS = [
   },
 ];
 
+async function callPresenceService(
+  env: Env | undefined,
+  endpoint: '/presence' | '/keepalive',
+  body?: Record<string, unknown>
+): Promise<Record<string, unknown> | null> {
+  if (!env?.PRESENCE_SERVICE_URL || !env?.PRESENCE_SECRET) return null;
+
+  const presenceRes = await fetch(`${env.PRESENCE_SERVICE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Presence-Secret': env.PRESENCE_SECRET,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!presenceRes.ok) {
+    throw new Error(`Presence service error: ${presenceRes.status}`);
+  }
+
+  return presenceRes.json() as Promise<Record<string, unknown>>;
+}
+
+async function markDiscordActivity(env: Env | undefined): Promise<void> {
+  try {
+    await callPresenceService(env, '/keepalive');
+  } catch {
+    // Discord actions should still work if the optional heartbeat service is asleep or absent.
+  }
+}
+
 async function handleToolCall(
   client: DiscordClient,
   name: string,
@@ -221,16 +266,45 @@ async function handleToolCall(
   env?: Env
 ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
   try {
+    if (name !== 'discord_set_presence' && name !== 'discord_keepalive') {
+      await markDiscordActivity(env);
+    }
+
     switch (name) {
       case 'discord_read_messages': {
         const messages = await client.readMessages(args.channelId, args.limit || 50);
         const formatted = messages.map((m) => ({
           id: m.id,
           content: m.content,
-          author: { id: m.author.id, username: m.author.username, bot: m.author.bot },
+          author: { id: m.author.id, username: m.author.username, globalName: m.author.global_name || null, bot: m.author.bot },
           timestamp: m.timestamp,
-          attachments: m.attachments.length,
-          embeds: m.embeds.length,
+          editedAt: m.edited_timestamp || null,
+          pinned: Boolean(m.pinned),
+          attachments: (m.attachments || []).map((a) => ({
+            id: a.id,
+            filename: a.filename,
+            contentType: a.content_type || null,
+            size: a.size,
+            url: a.url,
+            duration: a.duration_secs || null,
+            waveform: a.waveform || null,
+            flags: a.flags || 0,
+          })),
+          embeds: (m.embeds || []).map((e) => ({
+            title: e.title || null,
+            description: e.description || null,
+            url: e.url || null,
+            type: e.type || null,
+          })),
+          stickers: (m.sticker_items || []).map((s) => ({ id: s.id, name: s.name, formatType: s.format_type })),
+          reactions: (m.reactions || []).map((r) => ({
+            count: r.count,
+            emoji: {
+              id: r.emoji.id || null,
+              name: r.emoji.name || null,
+              animated: Boolean(r.emoji.animated),
+            },
+          })),
           mentions: m.mentions?.map(u => u.username) || [],
           replyTo: m.message_reference?.message_id || null,
           thread: m.thread ? { id: m.thread.id, name: m.thread.name } : null,
@@ -241,11 +315,17 @@ async function handleToolCall(
       }
 
       case 'discord_send': {
+        await client.setTyping(args.channelId);
         await client.sendMessage(args.channelId, args.message, args.replyToMessageId, args.embeds);
         const response = args.replyToMessageId
           ? `Message sent to ${args.channelId} as reply to ${args.replyToMessageId}`
           : `Message sent to ${args.channelId}`;
         return { content: [{ type: 'text', text: response }] };
+      }
+
+      case 'discord_set_typing': {
+        await client.setTyping(args.channelId);
+        return { content: [{ type: 'text', text: `Typing indicator sent to ${args.channelId}` }] };
       }
 
       case 'discord_edit_message': {
@@ -259,6 +339,7 @@ async function handleToolCall(
       }
 
       case 'discord_send_file': {
+        await client.setTyping(args.channelId);
         const result = await client.sendFile(args.channelId, args.fileUrl, args.filename, args.content, args.replyToMessageId);
         return { content: [{ type: 'text', text: `File "${args.filename}" sent to ${args.channelId} (message id: ${result.id})` }] };
       }
@@ -344,19 +425,12 @@ async function handleToolCall(
           return { content: [{ type: 'text', text: 'Presence service not configured. Set PRESENCE_SERVICE_URL and PRESENCE_SECRET to enable this tool.' }] };
         }
         const endpoint = name === 'discord_keepalive' ? '/keepalive' : '/presence';
-        const body = name === 'discord_keepalive' ? undefined : JSON.stringify({ status: args.status });
-        const presenceRes = await fetch(`${env.PRESENCE_SERVICE_URL}${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Presence-Secret': env.PRESENCE_SECRET,
-          },
-          body,
-        });
-        if (!presenceRes.ok) {
-          return { content: [{ type: 'text', text: `Presence service error: ${presenceRes.status}` }], isError: true };
-        }
-        const result = await presenceRes.json() as Record<string, unknown>;
+        const body = name === 'discord_keepalive' ? undefined : {
+          status: args.status,
+          activityName: args.activityName,
+          activityType: args.activityType,
+        };
+        const result = await callPresenceService(env, endpoint, body);
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
 
