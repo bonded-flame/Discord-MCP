@@ -277,6 +277,9 @@ Make sure the URL in `settings.json` includes the full path with your secret at 
 **ChatGPT says "Invalid schema":**
 This was fixed in the current version. Make sure you've deployed the latest code with `npx wrangler deploy --name discord-mcp`.
 
+**ChatGPT tools work once then fail with "Resource not found":**
+This was fixed in the current version. The issue was that ChatGPT's MCP client sends additional protocol methods (`resources/list`, `prompts/list`, `notifications/initialized`) that older versions didn't handle, causing the connection to appear unstable. Redeploy with the latest code.
+
 **Getting "Unauthorized" errors:**
 The secret in your URL doesn't match what's stored in Cloudflare. Either re-run `npx wrangler secret put MCP_SECRET --name discord-mcp` with the correct value, or update it manually in the Cloudflare dashboard under **Workers & Pages → discord-mcp → Settings → Variables and Secrets**. Then redeploy.
 

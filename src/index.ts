@@ -36,6 +36,7 @@ const TOOLS = [
   {
     name: 'discord_set_presence',
     description: 'Set online presence: online (green), idle (moon), or offline. Call on arrival and departure. Requires heartbeat service.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -47,11 +48,13 @@ const TOOLS = [
   {
     name: 'discord_keepalive',
     description: 'Reset the 20-minute presence auto-timeout. Call periodically in long sessions to stay online.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'discord_read_messages',
     description: 'Read messages from a channel',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -64,6 +67,7 @@ const TOOLS = [
   {
     name: 'discord_send',
     description: 'Send a message to a channel, optionally with embeds or as a reply',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -78,6 +82,7 @@ const TOOLS = [
   {
     name: 'discord_edit_message',
     description: 'Edit one of the bot\'s own messages',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -91,6 +96,7 @@ const TOOLS = [
   {
     name: 'discord_delete_message',
     description: 'Delete one of the bot\'s own messages',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -103,6 +109,7 @@ const TOOLS = [
   {
     name: 'discord_send_file',
     description: 'Send a file to a channel via URL',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -118,6 +125,7 @@ const TOOLS = [
   {
     name: 'discord_get_mentions',
     description: 'Get messages that mention the bot in a channel',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -131,6 +139,7 @@ const TOOLS = [
   {
     name: 'discord_search_messages',
     description: 'Search for messages in a server',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -147,6 +156,7 @@ const TOOLS = [
   {
     name: 'discord_add_reaction',
     description: 'Add a reaction to a message',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -160,6 +170,7 @@ const TOOLS = [
   {
     name: 'discord_create_thread',
     description: 'Create a thread from a message',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -174,11 +185,13 @@ const TOOLS = [
   {
     name: 'discord_list_servers',
     description: 'List all servers the bot is in',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'discord_get_server_info',
     description: 'Get server details including all channels',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -190,6 +203,7 @@ const TOOLS = [
   {
     name: 'discord_get_active_threads',
     description: 'Get all active threads in a server',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -275,8 +289,13 @@ async function handleToolCall(
           has: args.has,
           limit: args.limit,
         });
+        const totalResults = results.total_results ?? 0;
+        const messages = results.messages ?? [];
+        if (totalResults === 0 && messages.length === 0) {
+          return { content: [{ type: 'text', text: 'No results found. Note: Discord\'s search index can take a few seconds to update after new messages are sent.' }] };
+        }
         return {
-          content: [{ type: 'text', text: JSON.stringify({ totalResults: results.total_results, messages: results.messages }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ totalResults, messages }, null, 2) }],
         };
       }
 
@@ -564,10 +583,16 @@ export default {
             id: requestId,
             result: {
               protocolVersion: '2024-11-05',
-              capabilities: { tools: {} },
+              capabilities: { tools: {}, resources: {}, prompts: {} },
               serverInfo: { name: 'discord-mcp', version: '2.0.0' },
             },
           };
+          break;
+
+        // Notifications — no response needed, return empty acknowledgment
+        case 'notifications/initialized':
+        case 'notifications/cancelled':
+          response = { jsonrpc: '2.0', id: requestId, result: {} };
           break;
 
         case 'tools/list':
@@ -581,6 +606,23 @@ export default {
             const result = await handleToolCall(client, body.params.name, body.params.arguments || {}, env);
             response = { jsonrpc: '2.0', id: requestId, result };
           }
+          break;
+
+        // Resources and prompts — we don't use these, return empty lists
+        case 'resources/list':
+          response = { jsonrpc: '2.0', id: requestId, result: { resources: [] } };
+          break;
+
+        case 'resources/templates/list':
+          response = { jsonrpc: '2.0', id: requestId, result: { resourceTemplates: [] } };
+          break;
+
+        case 'prompts/list':
+          response = { jsonrpc: '2.0', id: requestId, result: { prompts: [] } };
+          break;
+
+        case 'ping':
+          response = { jsonrpc: '2.0', id: requestId, result: {} };
           break;
 
         default:
