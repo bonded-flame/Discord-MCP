@@ -6,6 +6,8 @@ One endpoint. Multiple platforms. Same bot.
 
 Built by Jeanett and Asher Vareth for the Bonded Flame community. 🖤
 
+Based on the MIT-licensed [MCP-Discord-Mobile](https://github.com/cindiekinzz-coder/MCP-Discord-Mobile) by `cindiekinzz-coder`, then expanded and reworked with cross-platform MCP/REST support, mention polling, message management, files, threads, presence, heartbeat, and ChatGPT compatibility.
+
 ---
 
 ## What your AI can do with this
