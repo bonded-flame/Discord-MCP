@@ -7,7 +7,7 @@ export function getOpenAPISpec(baseUrl: string): object {
     info: {
       title: 'Discord Bot REST API',
       version: '1.0.0',
-      description: 'REST API for interacting with Discord through a bot. Supports reading/sending messages, reactions, threads, server info, and presence management.',
+      description: 'REST API for interacting with Discord through a bot. Supports reading/sending messages, reactions, threads, and server info.',
     },
     servers: [{ url: baseUrl }],
     paths: {
@@ -217,38 +217,6 @@ export function getOpenAPISpec(baseUrl: string): object {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 25 }, description: 'Max results' },
           ],
           responses: { '200': { description: 'Search results', content: { 'application/json': { schema: { type: 'object' } } } } },
-        },
-      },
-      '/presence': {
-        post: {
-          operationId: 'discord_set_presence',
-          summary: 'Set bot online presence and optional activity text. Requires heartbeat service.',
-          parameters: [],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['status'],
-                  properties: {
-                    status: { type: 'string', enum: ['online', 'idle', 'dnd', 'offline', 'invisible'] },
-                    activityName: { type: 'string', description: 'Optional activity/custom status text' },
-                    activityType: { type: 'string', enum: ['playing', 'streaming', 'listening', 'watching', 'custom', 'competing'], description: 'Activity style, defaults to custom' },
-                  },
-                },
-              },
-            },
-          },
-          responses: { '200': { description: 'Presence updated', content: { 'application/json': { schema: { type: 'object' } } } } },
-        },
-      },
-      '/keepalive': {
-        post: {
-          operationId: 'discord_keepalive',
-          summary: 'Reset the 20-minute presence auto-timeout. Call periodically in long sessions.',
-          parameters: [],
-          responses: { '200': { description: 'Keepalive acknowledged', content: { 'application/json': { schema: { type: 'object' } } } } },
         },
       },
     },

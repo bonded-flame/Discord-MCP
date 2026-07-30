@@ -6,7 +6,7 @@ One endpoint. Multiple platforms. Same bot.
 
 Built by Jeanett and Asher Vareth for the Bonded Flame community. 🖤
 
-Based on the MIT-licensed [MCP-Discord-Mobile](https://github.com/cindiekinzz-coder/MCP-Discord-Mobile) by `cindiekinzz-coder`, then expanded and reworked with cross-platform MCP/REST support, mention polling, message management, files, threads, presence, heartbeat, and ChatGPT compatibility.
+Based on the MIT-licensed [MCP-Discord-Mobile](https://github.com/cindiekinzz-coder/MCP-Discord-Mobile) by `cindiekinzz-coder`, then expanded and reworked with cross-platform MCP/REST support, message management, files, threads, and ChatGPT compatibility.
 
 ---
 
@@ -211,7 +211,7 @@ ChatGPT supports MCP connectors natively. To add it:
 4. Check the "I understand and want to continue" box
 5. Click **Create**
 
-That's it. ChatGPT now has the same Discord tools as Claude — same bot, same channels, same presence.
+That's it. ChatGPT now has the same Discord tools as Claude — same bot, same channels.
 
 ### Other MCP-compatible platforms
 
@@ -225,52 +225,6 @@ No OAuth. No special headers. If the platform speaks MCP, it just works.
 
 ---
 
-## DM notifications
-
-Every 5 minutes, the worker checks all channels and threads in every server your bot is in. If someone @mentions your AI or replies to one of its messages, you'll get a Discord DM from the bot telling you exactly who said what and where.
-
-> **First time:** The bot's first DM might land in your **Message Requests** instead of your inbox. Check there if nothing shows up after 10 minutes.
-
-### Want to quiet the notifications for a while?
-
-The easiest way is Discord's own mute — no settings, no dashboard, no fuss:
-
-**Right-click the bot's DM in your sidebar → Mute @[bot name] → pick how long.**
-
-Done. It'll unmute itself when the time runs out.
-
-### Want to turn notifications off completely?
-
-Go to [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → discord-mcp → Settings → Variables and Secrets** → add a new variable:
-
-- **Variable name:** `MENTION_DMS`
-- **Value:** `false`
-
-Save it. Done. To turn them back on, just delete that variable.
-
----
-
-## Optional — Give your AI a real online presence
-
-Want your AI to show as **online** in Discord when they're in an active session — and offline when they're not?
-
-There's an optional add-on called **heartbeat**. It gives your AI a green dot next to their name in Discord. Real presence, not always-on. They go online when they use Discord tools, and the status clears automatically after 20 minutes if nothing keeps it active.
-
-This part needs a free [Render](https://render.com) account (sign up with GitHub — it takes two minutes). Once that's set up, your AI gets two extra tools: one to set presence/activity directly, and one to stay online during longer sessions. Normal Discord activity through this MCP also bumps presence automatically.
-
-👉 **[See the heartbeat setup guide](./heartbeat/README.md)**
-
-> **Not interested?** Skip this entirely. Don't set up Render, don't follow that guide, and nothing breaks. The rest of the MCP works exactly as normal.
-
----
-
-## If notifications never arrive — cron trigger check
-
-The background check runs on a 5-minute schedule that should set itself up automatically. But older versions of Wrangler sometimes miss it.
-
-If you deployed and no DMs ever show up: go to [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → discord-mcp → Triggers → Cron Triggers** → add `*/5 * * * *` manually. That's it.
-
----
 
 ## Troubleshooting
 
@@ -312,12 +266,7 @@ Double-check that `OWNER_DISCORD_ID` is your user ID (not your username, not the
 | `discord_get_server_info` | Get server details and channel list |
 | `discord_get_active_threads` | See all active threads in a server |
 
-**Optional presence tools** (only available after [heartbeat](./heartbeat/README.md) setup):
-
-| Tool | What it does |
-|------|-------------|
-| `discord_set_presence` | Set status to online, idle, dnd, or offline/invisible, with optional activity text |
-| `discord_keepalive` | Reset the 20-minute auto-timeout to stay online |
+------|-------------|
 
 ---
 

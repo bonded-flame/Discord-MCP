@@ -8,11 +8,6 @@ import { getOpenAPISpec } from './openapi';
 interface Env {
   DISCORD_TOKEN: string;
   MCP_SECRET: string;
-  OWNER_DISCORD_ID: string;
-  MENTION_DMS: string; // Set to "false" in Cloudflare vars to disable DM notifications
-  PRESENCE_SERVICE_URL: string; // Optional — heartbeat service URL (e.g. https://heartbeat.onrender.com)
-  PRESENCE_SECRET: string;      // Optional — must match the heartbeat service's PRESENCE_SECRET
-  WATCH_CHANNELS: string;       // Optional — comma-separated channel IDs to monitor for mentions. If unset, scans first 8 channels per guild.
 }
 
 interface MCPRequest {
@@ -33,26 +28,6 @@ interface MCPResponse {
 }
 
 const TOOLS = [
-  {
-    name: 'discord_set_presence',
-    description: 'Set online presence and optional activity text. Requires heartbeat service.',
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        status: { type: 'string', enum: ['online', 'idle', 'dnd', 'offline', 'invisible'] },
-        activityName: { type: 'string', description: 'Optional activity/custom status text' },
-        activityType: { type: 'string', enum: ['playing', 'streaming', 'listening', 'watching', 'custom', 'competing'], description: 'Activity style, defaults to custom' },
-      },
-      required: ['status'],
-    },
-  },
-  {
-    name: 'discord_keepalive',
-    description: 'Reset the 20-minute presence auto-timeout. Call periodically in long sessions to stay online.',
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    inputSchema: { type: 'object', properties: {}, required: [] },
-  },
   {
     name: 'discord_read_messages',
     description: 'Read messages from a channel',
@@ -83,7 +58,7 @@ const TOOLS = [
   },
   {
     name: 'discord_set_typing',
-    description: 'Show the bot typing in a channel for a few seconds. Also marks presence online when heartbeat is configured.',
+    description: 'Show the bot typing in a channel for a few seconds',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -228,37 +203,6 @@ const TOOLS = [
   },
 ];
 
-async function callPresenceService(
-  env: Env | undefined,
-  endpoint: '/presence' | '/keepalive',
-  body?: Record<string, unknown>
-): Promise<Record<string, unknown> | null> {
-  if (!env?.PRESENCE_SERVICE_URL || !env?.PRESENCE_SECRET) return null;
-
-  const presenceRes = await fetch(`${env.PRESENCE_SERVICE_URL}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Presence-Secret': env.PRESENCE_SECRET,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  if (!presenceRes.ok) {
-    throw new Error(`Presence service error: ${presenceRes.status}`);
-  }
-
-  return presenceRes.json() as Promise<Record<string, unknown>>;
-}
-
-async function markDiscordActivity(env: Env | undefined): Promise<void> {
-  try {
-    await callPresenceService(env, '/keepalive');
-  } catch {
-    // Discord actions should still work if the optional heartbeat service is asleep or absent.
-  }
-}
-
 async function handleToolCall(
   client: DiscordClient,
   name: string,
@@ -266,10 +210,6 @@ async function handleToolCall(
   env?: Env
 ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
   try {
-    if (name !== 'discord_set_presence' && name !== 'discord_keepalive') {
-      await markDiscordActivity(env);
-    }
-
     switch (name) {
       case 'discord_read_messages': {
         const messages = await client.readMessages(args.channelId, args.limit || 50);
@@ -419,21 +359,6 @@ async function handleToolCall(
         };
       }
 
-      case 'discord_set_presence':
-      case 'discord_keepalive': {
-        if (!env?.PRESENCE_SERVICE_URL || !env?.PRESENCE_SECRET) {
-          return { content: [{ type: 'text', text: 'Presence service not configured. Set PRESENCE_SERVICE_URL and PRESENCE_SECRET to enable this tool.' }] };
-        }
-        const endpoint = name === 'discord_keepalive' ? '/keepalive' : '/presence';
-        const body = name === 'discord_keepalive' ? undefined : {
-          status: args.status,
-          activityName: args.activityName,
-          activityType: args.activityType,
-        };
-        const result = await callPresenceService(env, endpoint, body);
-        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-      }
-
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
@@ -444,147 +369,7 @@ async function handleToolCall(
 }
 
 // Convert timestamp to Discord snowflake ID (for filtering messages after a point in time)
-function timestampToSnowflake(timestamp: number): string {
-  const DISCORD_EPOCH = 1420070400000n;
-  return ((BigInt(timestamp) - DISCORD_EPOCH) << 22n).toString();
-}
-
-async function sendOwnerDM(env: Env, message: string): Promise<void> {
-  const DISCORD_API = 'https://discord.com/api/v10';
-
-  // Open a DM channel with the owner
-  const dmChannelResponse = await fetch(`${DISCORD_API}/users/@me/channels`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bot ${env.DISCORD_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ recipient_id: env.OWNER_DISCORD_ID }),
-  });
-
-  if (!dmChannelResponse.ok) return;
-  const dmChannel = await dmChannelResponse.json() as { id: string };
-
-  // Send the DM
-  await fetch(`${DISCORD_API}/channels/${dmChannel.id}/messages`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bot ${env.DISCORD_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ content: message }),
-  });
-}
-
-async function checkChannelForActivity(
-  client: DiscordClient,
-  channelId: string,
-  channelName: string,
-  guildName: string,
-  botUserId: string,
-  afterSnowflake: string,
-  foundMentions: string[]
-): Promise<void> {
-  // Get recent messages in this channel/thread
-  let endpoint = `/channels/${channelId}/messages?limit=20`;
-  if (afterSnowflake) endpoint += `&after=${afterSnowflake}`;
-
-  const DISCORD_API = 'https://discord.com/api/v10';
-  const response = await fetch(`${DISCORD_API}${endpoint}`, {
-    headers: { 'Authorization': `Bot ${(client as any).token}` },
-  });
-  if (!response.ok) return;
-  const messages = await response.json() as any[];
-
-  for (const message of messages) {
-    // Skip the bot's own messages
-    if (message.author?.id === botUserId) continue;
-
-    const isMention = message.mentions?.some((u: any) => u.id === botUserId);
-    const isReply = message.message_reference?.message_id &&
-      message.referenced_message?.author?.id === botUserId;
-
-    if (isMention || isReply) {
-      const type = isReply && !isMention ? '↩️ replied to you' : '📨 mentioned you';
-      const preview = (message.content || '[no text content]').slice(0, 200);
-      foundMentions.push(
-        `${type} — **${message.author?.username}** in **#${channelName}** (${guildName}):\n> ${preview}\n\nMessage ID: ${message.id} | Channel ID: ${channelId}`
-      );
-    }
-  }
-}
-
-async function pollMentions(env: Env): Promise<void> {
-  const client = new DiscordClient(env.DISCORD_TOKEN);
-
-  const botUser = await client.getBotUser();
-  const guilds = await client.listGuilds();
-
-  // Check 6 minutes back — slightly more than our 5-minute cron interval
-  const checkAfter = Date.now() - 6 * 60 * 1000;
-  const afterSnowflake = timestampToSnowflake(checkAfter);
-
-  const foundMentions: string[] = [];
-
-  // If WATCH_CHANNELS is set, only scan those specific channel IDs.
-  // Otherwise fall back to first 8 text channels per guild (free tier subrequest limit).
-  const watchList = env.WATCH_CHANNELS
-    ? env.WATCH_CHANNELS.split(',').map(s => s.trim()).filter(Boolean)
-    : null;
-
-  for (const guild of guilds) {
-    try {
-      const channels = await client.getGuildChannels(guild.id);
-
-      const relevantChannels = watchList
-        ? channels.filter(c => watchList.includes(c.id))
-        : channels.filter(c => [0, 5, 10, 11, 12].includes(c.type)).slice(0, 8);
-
-      for (const channel of relevantChannels) {
-        try {
-          await checkChannelForActivity(
-            client, channel.id, channel.name, guild.name,
-            botUser.id, afterSnowflake, foundMentions
-          );
-        } catch {
-          // Skip channels we can't read
-        }
-      }
-
-      // Also check active threads (threads are separate from channels in Discord API)
-      try {
-        const threadsResult = await client.getActiveThreads(guild.id);
-        for (const thread of threadsResult.threads.slice(0, 5)) {
-          try {
-            await checkChannelForActivity(
-              client, thread.id, thread.name, guild.name,
-              botUser.id, afterSnowflake, foundMentions
-            );
-          } catch {
-            // Skip threads we can't read
-          }
-        }
-      } catch {
-        // Skip if can't fetch threads
-      }
-
-    } catch {
-      // Skip guilds we can't access
-    }
-  }
-
-  if (foundMentions.length > 0 && env.MENTION_DMS !== 'false') {
-    const dmMessage = `🔔 **Asher was contacted ${foundMentions.length === 1 ? 'once' : `${foundMentions.length} times`}:**\n\n${foundMentions.join('\n\n---\n\n')}`;
-    await sendOwnerDM(env, dmMessage);
-  }
-}
-
 export default {
-  // Cron trigger — runs every 5 minutes to check for mentions
-  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await pollMentions(env);
-  },
-
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
       return new Response(null, {

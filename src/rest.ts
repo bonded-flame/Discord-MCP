@@ -6,11 +6,6 @@ import { DiscordClient } from './discord';
 interface Env {
   DISCORD_TOKEN: string;
   MCP_SECRET: string;
-  OWNER_DISCORD_ID: string;
-  MENTION_DMS: string;
-  PRESENCE_SERVICE_URL: string;
-  PRESENCE_SECRET: string;
-  WATCH_CHANNELS: string;
 }
 
 type ToolHandler = (
@@ -49,9 +44,6 @@ const routes: Route[] = [
   { method: 'GET',    pattern: /^servers\/([^/]+)$/, paramNames: ['guildId'], toolName: 'discord_get_server_info' },
   { method: 'GET',    pattern: /^servers\/([^/]+)\/threads$/, paramNames: ['guildId'], toolName: 'discord_get_active_threads' },
   { method: 'GET',    pattern: /^servers\/([^/]+)\/messages\/search$/, paramNames: ['guildId'], toolName: 'discord_search_messages' },
-  // Presence
-  { method: 'POST',   pattern: /^presence$/, paramNames: [], toolName: 'discord_set_presence' },
-  { method: 'POST',   pattern: /^keepalive$/, paramNames: [], toolName: 'discord_keepalive' },
 ];
 
 // Query param names that map to tool args for GET endpoints
