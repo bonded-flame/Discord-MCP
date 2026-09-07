@@ -1,14 +1,21 @@
 // Discord MCP Worker - Discord access from anywhere via Cloudflare Workers
 // Lightweight REST-based MCP for mobile Claude and browser clients
 
-import { DiscordClient, DiscordEmbed } from './discord';
-import { handleRestRequest } from './rest';
-import { getOpenAPISpec } from './openapi';
+import { DiscordClient, type DiscordEmbed } from './discord.ts';
+import { handleRestRequest } from './rest.ts';
+import { getOpenAPISpec } from './openapi.ts';
+import { judgeSend, type JudgeSendInput, type JudgeVerdict } from './mouth.ts';
 
-interface Env {
+export interface Env {
   DISCORD_TOKEN: string;
   MCP_SECRET: string;
+  // Service binding to the voices worker — the Mouth's config and judge live
+  // there; Discord-mcp binds no KV of its own (CONTRACTS.md section A).
+  VOICES?: Fetcher;
+  VOICES_GATE_SECRET?: string;
 }
+
+type JudgeSendFn = (env: Env, input: JudgeSendInput, ctx?: ExecutionContext) => Promise<JudgeVerdict>;
 
 interface MCPRequest {
   jsonrpc: string;
@@ -203,12 +210,15 @@ const TOOLS = [
   },
 ];
 
-async function handleToolCall(
+export async function handleToolCall(
   client: DiscordClient,
   name: string,
   args: Record<string, any>,
-  env?: Env
+  env?: Env,
+  judge: JudgeSendFn = judgeSend,
+  ctx?: ExecutionContext
 ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
+  const activeEnv: Env = env ?? ({} as Env);
   try {
     switch (name) {
       case 'discord_read_messages': {
@@ -255,6 +265,10 @@ async function handleToolCall(
       }
 
       case 'discord_send': {
+        const verdict = await judge(activeEnv, { tool: name, channelId: args.channelId, draft: args.message, context: '' }, ctx);
+        if (!verdict.send) {
+          return { content: [{ type: 'text', text: `Held: ${verdict.reason}\n\nDraft: ${args.message}` }] };
+        }
         await client.setTyping(args.channelId);
         await client.sendMessage(args.channelId, args.message, args.replyToMessageId, args.embeds);
         const response = args.replyToMessageId
@@ -269,6 +283,10 @@ async function handleToolCall(
       }
 
       case 'discord_edit_message': {
+        const verdict = await judge(activeEnv, { tool: name, channelId: args.channelId, draft: args.content, context: '' }, ctx);
+        if (!verdict.send) {
+          return { content: [{ type: 'text', text: `Held: ${verdict.reason}\n\nDraft: ${args.content}` }] };
+        }
         const edited = await client.editMessage(args.channelId, args.messageId, args.content);
         return { content: [{ type: 'text', text: `Message ${edited.id} updated.` }] };
       }
@@ -279,6 +297,11 @@ async function handleToolCall(
       }
 
       case 'discord_send_file': {
+        const draft = args.content || args.filename || '';
+        const verdict = await judge(activeEnv, { tool: name, channelId: args.channelId, draft, context: '' }, ctx);
+        if (!verdict.send) {
+          return { content: [{ type: 'text', text: `Held: ${verdict.reason}\n\nDraft: ${draft}` }] };
+        }
         await client.setTyping(args.channelId);
         const result = await client.sendFile(args.channelId, args.fileUrl, args.filename, args.content, args.replyToMessageId);
         return { content: [{ type: 'text', text: `File "${args.filename}" sent to ${args.channelId} (message id: ${result.id})` }] };
@@ -370,7 +393,7 @@ async function handleToolCall(
 
 // Convert timestamp to Discord snowflake ID (for filtering messages after a point in time)
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
@@ -411,7 +434,7 @@ export default {
         });
       }
 
-      return handleRestRequest(request, env, remainingPath, handleToolCall);
+      return handleRestRequest(request, env, remainingPath, handleToolCall, ctx);
     }
 
     // ============ MCP Protocol (for Claude) ============
@@ -462,7 +485,7 @@ export default {
           if (!body.params?.name) {
             response = { jsonrpc: '2.0', id: requestId, error: { code: -32602, message: 'Missing tool name' } };
           } else {
-            const result = await handleToolCall(client, body.params.name, body.params.arguments || {}, env);
+            const result = await handleToolCall(client, body.params.name, body.params.arguments || {}, env, undefined, ctx);
             response = { jsonrpc: '2.0', id: requestId, result };
           }
           break;

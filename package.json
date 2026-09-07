@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "Discord MCP server for Cloudflare Workers — gives your AI a voice in Discord from Claude, ChatGPT, and any MCP-compatible platform",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test": "node --test \"test/**/*.test.ts\""
   },
   "keywords": [
     "discord",
@@ -20,6 +22,7 @@
   "license": "MIT",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
+    "@types/node": "^24.0.0",
     "typescript": "^5.3.3",
     "wrangler": "^4.68.1"
   }

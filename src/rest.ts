@@ -1,7 +1,7 @@
 // REST API layer for ChatGPT Actions (and any other OpenAPI consumer)
 // Thin route handlers that delegate to the same handleToolCall used by MCP
 
-import { DiscordClient } from './discord';
+import { DiscordClient } from './discord.ts';
 
 interface Env {
   DISCORD_TOKEN: string;
@@ -12,7 +12,9 @@ type ToolHandler = (
   client: DiscordClient,
   name: string,
   args: Record<string, any>,
-  env?: Env
+  env?: Env,
+  judge?: any,
+  ctx?: ExecutionContext
 ) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>;
 
 interface Route {
@@ -74,7 +76,8 @@ export async function handleRestRequest(
   request: Request,
   env: Env,
   pathAfterSecret: string,
-  toolHandler: ToolHandler
+  toolHandler: ToolHandler,
+  ctx?: ExecutionContext
 ): Promise<Response> {
   const method = request.method;
 
@@ -132,7 +135,7 @@ export async function handleRestRequest(
   const client = new DiscordClient(env.DISCORD_TOKEN);
 
   try {
-    const result = await toolHandler(client, matched.toolName, args, env);
+    const result = await toolHandler(client, matched.toolName, args, env, undefined, ctx);
 
     if (result.isError) {
       const errorText = result.content[0]?.text || 'Unknown error';
