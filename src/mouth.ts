@@ -25,6 +25,9 @@ export interface JudgeSendInput {
 export interface JudgeVerdict {
   send: boolean;
   reason?: string;
+  // True only when the Mouth actually evaluated this send. A missing Mouth
+  // configuration deliberately preserves the existing unjudged-send policy.
+  mouthChecked: boolean;
 }
 
 interface MouthSection {
@@ -98,14 +101,14 @@ async function postMouth(env: Env, input: JudgeSendInput, timeoutMs: number): Pr
 export async function judgeSend(env: Env, input: JudgeSendInput, ctx?: ExecutionContext): Promise<JudgeVerdict> {
   const config = await readMouthConfig(env);
   if (!config) {
-    const verdict: JudgeVerdict = { send: true, reason: 'config unavailable' };
+    const verdict: JudgeVerdict = { send: true, reason: 'config unavailable', mouthChecked: false };
     logVerdict(env, input, verdict, 0, ctx);
     return verdict;
   }
 
   const scope = config.tuning?.scope ?? [];
   if (!config.enabled || (scope.length > 0 && !scope.includes(input.channelId))) {
-    const verdict: JudgeVerdict = { send: true };
+    const verdict: JudgeVerdict = { send: true, mouthChecked: false };
     logVerdict(env, input, verdict, 0, ctx);
     return verdict;
   }
@@ -122,19 +125,21 @@ export async function judgeSend(env: Env, input: JudgeSendInput, ctx?: Execution
       if (!res.ok) throw new Error(`/mouth -> ${res.status}`);
       const raw = (await res.json()) as { send?: boolean; reason?: string };
       if (typeof raw.send !== 'boolean') throw new Error('unparseable verdict');
-      const verdict: JudgeVerdict = raw.send ? { send: true } : { send: false, reason: raw.reason };
+      const verdict: JudgeVerdict = raw.send
+        ? { send: true, mouthChecked: true }
+        : { send: false, reason: raw.reason, mouthChecked: true };
       logVerdict(env, input, verdict, Date.now() - start, ctx);
       return verdict;
     } catch {
       if (attempt < attempts - 1) continue;
-      const verdict: JudgeVerdict = { send: false, reason: holdReason };
+      const verdict: JudgeVerdict = { send: false, reason: holdReason, mouthChecked: true };
       logVerdict(env, input, verdict, Date.now() - start, ctx);
       return verdict;
     }
   }
 
   // Unreachable — the loop above always returns.
-  const verdict: JudgeVerdict = { send: false, reason: holdReason };
+  const verdict: JudgeVerdict = { send: false, reason: holdReason, mouthChecked: true };
   logVerdict(env, input, verdict, Date.now() - start, ctx);
   return verdict;
 }
