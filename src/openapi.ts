@@ -106,7 +106,6 @@ export function getOpenAPISpec(baseUrl: string): object {
                     fileUrl: { type: 'string', description: 'URL of the file to send' },
                     filename: { type: 'string', description: 'Filename for the attachment' },
                     content: { type: 'string', description: 'Optional message text' },
-                    judgmentText: { type: 'string', description: 'Private text for Mouth judgment only; never sent in the Discord message payload' },
                     replyToMessageId: { type: 'string', description: 'Message ID to reply to' },
                   },
                 },

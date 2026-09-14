@@ -152,35 +152,8 @@ test('handleToolCall: a real judgeSend registers exactly one ctx.waitUntil per v
   resolveFetch?.();
 });
 
-test('discord_send_file: private judgmentText reaches Mouth while Discord receives only empty content and an accepted receipt', async () => {
-  const client = fakeClient();
-  const { judge, calls } = fakeJudge({ send: true, mouthChecked: true });
-  const result = await handleToolCall(client, 'discord_send_file', {
-    channelId: 'voice-channel',
-    fileUrl: 'https://home.example/voice-delivery/pickup/token',
-    filename: 'voice-note.wav',
-    content: '',
-    judgmentText: 'Words that must stay out of Discord text',
-  }, env, judge);
-
-  assert.equal(calls[0].draft, 'Words that must stay out of Discord text');
-  assert.deepEqual(client.sentFiles, [[
-    'voice-channel',
-    'https://home.example/voice-delivery/pickup/token',
-    'voice-note.wav',
-    '',
-    undefined,
-  ]]);
-  assert.match(result.content[0].text, /^File "voice-note\.wav" sent to voice-channel \(message id: m2\)$/);
-  assert.deepEqual(result.structuredContent, {
-    schema: 'bf.discord.delivery.v1',
-    delivery: { status: 'accepted', message_id: 'm2', mouth_checked: true },
-  });
-});
-
-test('discord_send_file: real DiscordClient multipart payload keeps explicit empty content and excludes private judgmentText', async () => {
+test('discord_send_file: real DiscordClient multipart payload keeps explicit empty content', async () => {
   const originalFetch = globalThis.fetch;
-  const privateWords = 'private artifact words must not reach Discord';
   let discordPayload: Record<string, unknown> | undefined;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = String(input);
@@ -195,7 +168,6 @@ test('discord_send_file: real DiscordClient multipart payload keeps explicit emp
     assert.equal(init?.method, 'POST');
     assert.ok(init?.body instanceof FormData);
     const payloadJson = String((init.body as FormData).get('payload_json'));
-    assert.doesNotMatch(payloadJson, /judgmentText|private artifact words/);
     discordPayload = JSON.parse(payloadJson) as Record<string, unknown>;
     return new Response(JSON.stringify({ id: 'real-message-id' }), { status: 200 });
   }) as typeof fetch;
@@ -207,10 +179,9 @@ test('discord_send_file: real DiscordClient multipart payload keeps explicit emp
       fileUrl: 'https://home.example/voice-delivery/pickup/token',
       filename: 'voice-note.wav',
       content: '',
-      judgmentText: privateWords,
     }, env, judge);
 
-    assert.equal(calls[0].draft, privateWords);
+    assert.equal(calls[0].draft, 'voice-note.wav');
     assert.deepEqual(discordPayload, { content: '', attachments: [{ id: '0', filename: 'voice-note.wav' }] });
     assert.deepEqual(result.structuredContent, {
       schema: 'bf.discord.delivery.v1',
@@ -225,13 +196,12 @@ test('discord_send_file: a Mouth hold is structured and does not call Discord', 
   const client = fakeClient();
   const { judge, calls } = fakeJudge({ send: false, reason: 'privacy hold', mouthChecked: true });
   const result = await handleToolCall(client, 'discord_send_file', {
-    channelId: 'voice-channel', fileUrl: 'https://x/voice.wav', filename: 'voice.wav', content: '', judgmentText: 'private words',
+    channelId: 'voice-channel', fileUrl: 'https://x/voice.wav', filename: 'voice.wav', content: '',
   }, env, judge);
 
-  assert.equal(calls[0].draft, 'private words');
+  assert.equal(calls[0].draft, 'voice.wav');
   assert.deepEqual(client.calls, []);
   assert.match(result.content[0].text, /^Held: privacy hold/);
-  assert.doesNotMatch(result.content[0].text, /private words/);
   assert.match(result.content[0].text, /Draft: voice\.wav$/);
   assert.deepEqual(result.structuredContent, {
     schema: 'bf.discord.delivery.v1',
@@ -306,12 +276,12 @@ test('discord_send_file: a transport failure remains the existing MCP isError re
   assert.equal(result.content[0].text, 'Error: network connection lost');
 });
 
-test('tools/list exposes optional judgmentText on discord_send_file', async () => {
+test('tools/list does not expose judgmentText on discord_send_file', async () => {
   const response = await worker.fetch(new Request('https://discord.example/mcp/s', { method: 'POST', body: JSON.stringify({
     jsonrpc: '2.0', id: 1, method: 'tools/list',
   }) }), env, {} as ExecutionContext);
   const body = await response.json() as { result: { tools: Array<{ name: string; inputSchema: { properties: Record<string, unknown> } }> } };
   const sendFile = body.result.tools.find((tool) => tool.name === 'discord_send_file');
   assert.ok(sendFile);
-  assert.ok(sendFile.inputSchema.properties.judgmentText);
+  assert.equal(sendFile.inputSchema.properties.judgmentText, undefined);
 });

@@ -113,7 +113,6 @@ const TOOLS = [
         fileUrl: { type: 'string', description: 'URL of the file' },
         filename: { type: 'string', description: 'Filename for the attachment' },
         content: { type: 'string', description: 'Optional message text' },
-        judgmentText: { type: 'string', description: 'Private text for Mouth judgment only; never sent in the Discord message payload' },
         replyToMessageId: { type: 'string', description: 'Message ID to reply to' },
       },
       required: ['channelId', 'fileUrl', 'filename'],
@@ -336,15 +335,11 @@ export async function handleToolCall(
       }
 
       case 'discord_send_file': {
-        // judgmentText is private to Mouth; Discord receives only `content`.
-        const visibleDraft = args.content || args.filename || '';
-        const judgmentDraft = args.judgmentText || visibleDraft;
-        const verdict = await judge(activeEnv, { tool: name, channelId: args.channelId, draft: judgmentDraft, context: '' }, ctx);
+        const draft = args.content || args.filename || '';
+        const verdict = await judge(activeEnv, { tool: name, channelId: args.channelId, draft, context: '' }, ctx);
         if (!verdict.send) {
           return {
-            // Keep the old human-readable result for ordinary callers without
-            // reflecting a private judgmentText into MCP content or logs.
-            content: [{ type: 'text', text: `Held: ${verdict.reason}\n\nDraft: ${visibleDraft}` }],
+            content: [{ type: 'text', text: `Held: ${verdict.reason}\n\nDraft: ${draft}` }],
             structuredContent: discordDeliveryResult('held', verdict.mouthChecked, { reason: verdict.reason }),
           };
         }
