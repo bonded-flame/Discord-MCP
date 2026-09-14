@@ -53,27 +53,27 @@ function fixtureVoices(opts: {
 test('judgeSend: config read fails -> send unjudged, reason "config unavailable"', async () => {
   const { env, calls } = fixtureVoices({ configFails: true });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, reason: 'config unavailable', mouthChecked: false });
+  assert.deepEqual(verdict, { send: true, reason: 'config unavailable' });
   // never reaches /mouth
   assert.equal(calls.some((c) => isMouthJudgeUrl(c.url)), false);
 });
 
 test('judgeSend: no VOICES binding at all -> send unjudged, reason "config unavailable"', async () => {
   const verdict = await judgeSend({} as Env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, reason: 'config unavailable', mouthChecked: false });
+  assert.deepEqual(verdict, { send: true, reason: 'config unavailable' });
 });
 
 test('judgeSend: mouth.enabled false -> bypass, send true, no judge call', async () => {
   const { env, calls } = fixtureVoices({ configDoc: { enabled: false, tuning: {} } });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, mouthChecked: false });
+  assert.deepEqual(verdict, { send: true });
   assert.equal(calls.some((c) => isMouthJudgeUrl(c.url)), false);
 });
 
 test('judgeSend: scope respected — channel outside scope bypasses', async () => {
   const { env, calls } = fixtureVoices({ configDoc: { enabled: true, tuning: { scope: ['other-channel'] } } });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, mouthChecked: false });
+  assert.deepEqual(verdict, { send: true });
   assert.equal(calls.some((c) => isMouthJudgeUrl(c.url)), false);
 });
 
@@ -83,7 +83,7 @@ test('judgeSend: scope respected — channel inside scope is judged', async () =
     mouthAnswers: [{ body: { send: true } }],
   });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, mouthChecked: true });
+  assert.deepEqual(verdict, { send: true });
   assert.equal(calls.some((c) => isMouthJudgeUrl(c.url)), true);
 });
 
@@ -93,7 +93,7 @@ test('judgeSend: empty scope means every channel is judged', async () => {
     mouthAnswers: [{ body: { send: true } }],
   });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'anything', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, mouthChecked: true });
+  assert.deepEqual(verdict, { send: true });
 });
 
 test('judgeSend: judge clears -> send true', async () => {
@@ -102,7 +102,7 @@ test('judgeSend: judge clears -> send true', async () => {
     mouthAnswers: [{ body: { send: true } }],
   });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, mouthChecked: true });
+  assert.deepEqual(verdict, { send: true });
 });
 
 test('judgeSend: judge holds -> send false with its reason', async () => {
@@ -111,7 +111,7 @@ test('judgeSend: judge holds -> send false with its reason', async () => {
     mouthAnswers: [{ body: { send: false, reason: 'crosses a sphere line' } }],
   });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: false, reason: 'crosses a sphere line', mouthChecked: true });
+  assert.deepEqual(verdict, { send: false, reason: 'crosses a sphere line' });
 });
 
 test('judgeSend: donor ears.ts 196-214 — first attempt fails, second succeeds (one retry)', async () => {
@@ -120,7 +120,7 @@ test('judgeSend: donor ears.ts 196-214 — first attempt fails, second succeeds 
     mouthAnswers: ['throw', { body: { send: true } }],
   });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, mouthChecked: true });
+  assert.deepEqual(verdict, { send: true });
   assert.equal(calls.filter((c) => isMouthJudgeUrl(c.url)).length, 2);
 });
 
@@ -130,7 +130,7 @@ test('judgeSend: non-OK response counts as a failed attempt', async () => {
     mouthAnswers: [{ status: 500 }, { body: { send: true } }],
   });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: true, mouthChecked: true });
+  assert.deepEqual(verdict, { send: true });
   assert.equal(calls.filter((c) => isMouthJudgeUrl(c.url)).length, 2);
 });
 
@@ -160,7 +160,7 @@ test('judgeSend: hold wording is editable via tuning.hold_reason', async () => {
     mouthAnswers: ['throw'],
   });
   const verdict = await judgeSend(env, { tool: 'discord_send', channelId: 'c1', draft: 'hi', context: '' });
-  assert.deepEqual(verdict, { send: false, reason: 'custom hold text', mouthChecked: true });
+  assert.deepEqual(verdict, { send: false, reason: 'custom hold text' });
 });
 
 test('judgeSend: retries tuning of 0 means exactly one attempt', async () => {

@@ -210,44 +210,6 @@ const TOOLS = [
   },
 ];
 
-interface DiscordDeliveryStructuredContent {
-  schema: 'bf.discord.delivery.v1';
-  delivery: {
-    status: 'accepted' | 'held' | 'rejected';
-    message_id?: string;
-    reason?: string;
-    mouth_checked: boolean;
-  };
-}
-
-interface ToolResult {
-  content: { type: string; text: string }[];
-  isError?: boolean;
-  structuredContent?: DiscordDeliveryStructuredContent;
-}
-
-function discordDeliveryResult(
-  status: DiscordDeliveryStructuredContent['delivery']['status'],
-  mouthChecked: boolean,
-  options: { messageId?: string; reason?: string } = {},
-): DiscordDeliveryStructuredContent {
-  return {
-    schema: 'bf.discord.delivery.v1',
-    delivery: {
-      status,
-      ...(options.messageId === undefined ? {} : { message_id: options.messageId }),
-      ...(options.reason === undefined ? {} : { reason: options.reason }),
-      mouth_checked: mouthChecked,
-    },
-  };
-}
-
-function explicitDiscordRejection(error: unknown): number | null {
-  if (!(error instanceof Error)) return null;
-  const match = /^Discord API error (4\d\d):/.exec(error.message);
-  return match ? Number(match[1]) : null;
-}
-
 export async function handleToolCall(
   client: DiscordClient,
   name: string,
@@ -255,7 +217,7 @@ export async function handleToolCall(
   env?: Env,
   judge: JudgeSendFn = judgeSend,
   ctx?: ExecutionContext
-): Promise<ToolResult> {
+): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
   const activeEnv: Env = env ?? ({} as Env);
   try {
     switch (name) {
@@ -338,35 +300,11 @@ export async function handleToolCall(
         const draft = args.content || args.filename || '';
         const verdict = await judge(activeEnv, { tool: name, channelId: args.channelId, draft, context: '' }, ctx);
         if (!verdict.send) {
-          return {
-            content: [{ type: 'text', text: `Held: ${verdict.reason}\n\nDraft: ${draft}` }],
-            structuredContent: discordDeliveryResult('held', verdict.mouthChecked, { reason: verdict.reason }),
-          };
+          return { content: [{ type: 'text', text: `Held: ${verdict.reason}\n\nDraft: ${draft}` }] };
         }
         await client.setTyping(args.channelId);
-        try {
-          const result = await client.sendFile(args.channelId, args.fileUrl, args.filename, args.content, args.replyToMessageId);
-          if (typeof result?.id !== 'string' || result.id.trim() === '') {
-            throw new Error('Discord file delivery response missing message id');
-          }
-          return {
-            content: [{ type: 'text', text: `File "${args.filename}" sent to ${args.channelId} (message id: ${result.id})` }],
-            structuredContent: discordDeliveryResult('accepted', verdict.mouthChecked, { messageId: result.id }),
-          };
-        } catch (error) {
-          const status = explicitDiscordRejection(error);
-          if (status !== null) {
-            const reason = `Discord rejected file delivery (HTTP ${status})`;
-            return {
-              content: [{ type: 'text', text: `Rejected: ${reason}` }],
-              structuredContent: discordDeliveryResult('rejected', verdict.mouthChecked, { reason }),
-            };
-          }
-          // Network faults, timeouts, and malformed responses have no
-          // accepted/rejected receipt. The existing MCP error boundary emits
-          // its normal isError result so the caller can mark delivery unknown.
-          throw error;
-        }
+        const result = await client.sendFile(args.channelId, args.fileUrl, args.filename, args.content, args.replyToMessageId);
+        return { content: [{ type: 'text', text: `File "${args.filename}" sent to ${args.channelId} (message id: ${result.id})` }] };
       }
 
       case 'discord_get_mentions': {

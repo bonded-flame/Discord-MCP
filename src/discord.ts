@@ -150,10 +150,7 @@ export class DiscordClient {
     const formData = new FormData();
 
     const payload: any = {};
-    // `undefined` retains the existing no-caption behavior. An explicitly
-    // empty string is intentional for voice delivery: it reaches Discord as
-    // empty visible content while private judgment text never enters here.
-    if (content !== undefined) payload.content = content;
+    if (content) payload.content = content;
     if (replyToMessageId) {
       payload.message_reference = { message_id: replyToMessageId };
     }
