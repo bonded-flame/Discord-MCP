@@ -408,8 +408,8 @@ export default {
     const pathParts = url.pathname.split('/').filter(Boolean);
 
     if (pathParts.length < 2 || (pathParts[0] !== 'mcp' && pathParts[0] !== 'api')) {
-      return new Response(JSON.stringify({ error: 'Invalid path. Use /mcp/YOUR_SECRET or /api/YOUR_SECRET/...' }), {
-        status: 400,
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       });
     }
