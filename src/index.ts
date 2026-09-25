@@ -3,6 +3,7 @@
 
 import { DiscordClient, type DiscordEmbed } from './discord.ts';
 import { handleRestRequest } from './rest.ts';
+import { handleMcpRequest } from './mcp.ts';
 import { getOpenAPISpec } from './openapi.ts';
 import { judgeSend, type JudgeSendInput, type JudgeVerdict } from './mouth.ts';
 
@@ -16,23 +17,6 @@ export interface Env {
 }
 
 type JudgeSendFn = (env: Env, input: JudgeSendInput, ctx?: ExecutionContext) => Promise<JudgeVerdict>;
-
-interface MCPRequest {
-  jsonrpc: string;
-  id: number | string;
-  method: string;
-  params?: {
-    name?: string;
-    arguments?: Record<string, any>;
-  };
-}
-
-interface MCPResponse {
-  jsonrpc: string;
-  id: number | string | null;
-  result?: any;
-  error?: { code: number; message: string };
-}
 
 const TOOLS = [
   {
@@ -437,89 +421,11 @@ export default {
       return handleRestRequest(request, env, remainingPath, handleToolCall, ctx);
     }
 
-    // ============ MCP Protocol (for Claude) ============
-    if (request.method === 'GET') {
-      return new Response(JSON.stringify({ name: 'discord-mcp', version: '2.0.0', status: 'ok' }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-      });
-    }
-
-    if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-        status: 405,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-      });
-    }
-
+    // One shared MCP path for all clients. Existing dispatch/Mouth behavior
+    // remains unchanged; the helper only repairs HTTP/JSON-RPC housekeeping.
     const client = new DiscordClient(env.DISCORD_TOKEN);
-
-    try {
-      const body: MCPRequest = await request.json();
-      const requestId = body.id ?? 1;
-      let response: MCPResponse;
-
-      switch (body.method) {
-        case 'initialize':
-          response = {
-            jsonrpc: '2.0',
-            id: requestId,
-            result: {
-              protocolVersion: '2024-11-05',
-              capabilities: { tools: {}, resources: {}, prompts: {} },
-              serverInfo: { name: 'discord-mcp', version: '2.0.0' },
-            },
-          };
-          break;
-
-        // Notifications — no response needed, return empty acknowledgment
-        case 'notifications/initialized':
-        case 'notifications/cancelled':
-          response = { jsonrpc: '2.0', id: requestId, result: {} };
-          break;
-
-        case 'tools/list':
-          response = { jsonrpc: '2.0', id: requestId, result: { tools: TOOLS } };
-          break;
-
-        case 'tools/call':
-          if (!body.params?.name) {
-            response = { jsonrpc: '2.0', id: requestId, error: { code: -32602, message: 'Missing tool name' } };
-          } else {
-            const result = await handleToolCall(client, body.params.name, body.params.arguments || {}, env, undefined, ctx);
-            response = { jsonrpc: '2.0', id: requestId, result };
-          }
-          break;
-
-        // Resources and prompts — we don't use these, return empty lists
-        case 'resources/list':
-          response = { jsonrpc: '2.0', id: requestId, result: { resources: [] } };
-          break;
-
-        case 'resources/templates/list':
-          response = { jsonrpc: '2.0', id: requestId, result: { resourceTemplates: [] } };
-          break;
-
-        case 'prompts/list':
-          response = { jsonrpc: '2.0', id: requestId, result: { prompts: [] } };
-          break;
-
-        case 'ping':
-          response = { jsonrpc: '2.0', id: requestId, result: {} };
-          break;
-
-        default:
-          response = { jsonrpc: '2.0', id: requestId, error: { code: -32601, message: `Unknown method: ${body.method}` } };
-      }
-
-      return new Response(JSON.stringify(response), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message } }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-      });
-    }
+    return handleMcpRequest(request, TOOLS, (name, args) =>
+      handleToolCall(client, name, args, env, undefined, ctx)
+    );
   },
 };
